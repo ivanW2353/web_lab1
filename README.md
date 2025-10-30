@@ -71,7 +71,9 @@
 
 ## 快速开始
 
-直接运行主程序：
+### 一键运行（推荐新手）
+
+完整演示模式，自动完成构建+示例查询：
 
 ```bash
 # 使用默认参数（处理前10000个文件）
@@ -82,29 +84,99 @@ python main.py --max_files 500
 
 # 处理所有文件
 python main.py --max_files 0
+```
 
-# 自定义数据路径和缓存目录
-python main.py --max_files 1000 --data_path "custom/data/path" --cache_dir "custom/cache"
+### 分步使用（推荐生产环境）
 
-# 查看帮助
-python main.py --help
+**1. 构建索引**（只需运行一次）
+```bash
+# 仅构建索引，不运行演示
+python main.py --mode build --max_files 10000
+```
+
+**2. 布尔检索**
+```bash
+# 单次查询
+python main.py --mode boolean --query "meeting and group"
+
+# 交互模式
+python main.py --mode boolean
+```
+
+**3. 向量检索**
+```bash
+# 单次查询
+python main.py --mode vector --query "technology conference" --top_k 5
+
+# 交互模式
+python main.py --mode vector
 ```
 
 ### 命令行参数说明
 
-- `--max_files`: 最大处理文件数量（默认：10000，设置为 0 处理所有文件）
+**模式选择**
+- `--mode`: 运行模式
+  - `full` (默认): 完整演示（构建+示例查询）
+  - `build`: 仅构建索引
+  - `boolean`: 布尔检索
+  - `vector`: 向量检索
+
+**数据处理参数**
+- `--max_files`: 最大处理文件数量（默认：10000，0=全部）
 - `--data_path`: 数据文件路径（默认：`Meetup/All_Unpack`）
 - `--cache_dir`: 缓存目录路径（默认：`Meetup/cache`）
+- `--index_file`: 索引文件路径（默认：`Meetup/inverted_index.json`）
+
+**查询参数**
+- `--query`: 查询语句（用于 boolean/vector 模式）
+- `--top_k`: 向量检索返回文档数（默认：10）
+- `--max_features`: TF-IDF 特征数量上限（默认：30000）
+
+### 使用场景
+
+| 场景 | 命令 |
+|------|------|
+| 🎓 首次体验/学习 | `python main.py` |
+| 🔧 构建索引 | `python main.py --mode build` |
+| 🔍 快速查询（布尔） | `python main.py --mode boolean --query "meeting and group"` |
+| 📊 相似度搜索（向量） | `python main.py --mode vector --query "tech event"` |
+| 💻 交互式探索 | `python main.py --mode boolean` 或 `--mode vector` |
 
 首次运行时，系统会：
 1. 自动下载 NLTK 所需数据到 `Meetup/nltk_data`（如果使用 NLTK）
 2. 解析 XML 数据文件（显示进度条）
 3. 进行文本规范化处理（显示进度条）
 4. 构建倒排索引（显示进度条）
-5. 执行示例布尔检索和向量检索查询
-6. 保存索引到文件
+5. 保存索引到文件
 
 后续运行会自动使用缓存，显著提升速度！
+
+## 独立脚本（可选）
+
+现在支持将“构建阶段”和“查询阶段”解耦：
+
+- 构建（解析→规范化→倒排索引→保存）
+  - 生成文件：`Meetup/inverted_index.json`，并在 `Meetup/cache/` 下生成多级缓存
+- 查询
+  - 布尔检索：直接加载倒排索引文件
+  - 向量检索：从文档缓存构建/加载 TF-IDF（无需倒排索引）
+
+示例命令（Windows PowerShell）：
+
+```powershell
+# 1) 构建阶段
+python .\build.py --data_path "Meetup/All_Unpack" --cache_dir "Meetup/cache" --max_files 10000 --index_out "Meetup/inverted_index.json"
+
+# 2) 布尔检索（加载已保存的索引）
+python .\search_boolean.py --index "Meetup/inverted_index.json" --query "meeting and group"
+
+# 3) 向量检索（使用缓存的文档，必要时自动构建TF-IDF缓存）
+python .\search_vector.py --data_path "Meetup/All_Unpack" --cache_dir "Meetup/cache" --top_k 5 --max_features 30000 --query "technology conference"
+
+# 交互模式
+python .\search_boolean.py
+python .\search_vector.py
+```
 
 ## 项目结构
 

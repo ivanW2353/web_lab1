@@ -91,6 +91,7 @@ class DataProcessor:
         
         processed_count = 0
         error_count = 0
+        skipped_count = 0  # 新增：跳过的文件计数
         
         # 使用 tqdm 进度条
         progress_bar = tqdm(
@@ -127,6 +128,9 @@ class DataProcessor:
                         'file_path': file_path
                     }
                     processed_count += 1
+                else:
+                    # 文件解析成功但内容无效（缺少ID或内容为空）
+                    skipped_count += 1
                     
             except ET.ParseError as e:
                 error_count += 1
@@ -139,7 +143,15 @@ class DataProcessor:
         end_time = time.time()
         self.processing_times['data_parsing'] = end_time - start_time
         
-        print(f"✅ 数据解析完成: 成功 {processed_count}, 错误 {error_count}, 耗时 {end_time - start_time:.2f}秒")
+        # 详细统计信息
+        total_files = len(xml_files)
+        print(f"✅ 数据解析完成: 耗时 {end_time - start_time:.2f}秒")
+        print(f"   📊 统计: 总文件 {total_files} = 成功 {processed_count} + 跳过 {skipped_count} + 错误 {error_count}")
+        
+        if skipped_count > 0:
+            print(f"   ⚠️  {skipped_count} 个文件被跳过（缺少ID或内容为空）")
+        if error_count > 0:
+            print(f"   ❌ {error_count} 个文件解析失败（XML格式错误）")
         
         # 保存到缓存
         if use_cache:

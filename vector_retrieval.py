@@ -255,8 +255,9 @@ class VectorRetrieval:
         doc_texts = []
         self.doc_ids = []
         
-        for doc_id, doc_info in self.documents.items():
-            doc_texts.append(doc_info['content'])
+        # 使用稳定的文档顺序，确保缓存键与结果可复现
+        for doc_id in sorted(self.documents.keys()):
+            doc_texts.append(self.documents[doc_id]['content'])
             self.doc_ids.append(doc_id)
         
         # 使用优化的TF-IDF
