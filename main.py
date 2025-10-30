@@ -103,10 +103,13 @@ def run_boolean_search(args):
             print("示例前 10 个结果:")
             for i, doc_id in enumerate(list(results)[:10], 1):
                 if documents and doc_id in documents:
-                    name = documents[doc_id]['name']
-                    if len(name) > 50:
-                        name = name[:50] + '...'
-                    print(f"  {i}. [{doc_id}] {name}")
+                    # 显示文件名（从完整路径提取）
+                    file_path = documents[doc_id].get('file_path', '')
+                    if file_path:
+                        filename = os.path.basename(file_path)
+                        print(f"  {i}. [{doc_id}] {filename}")
+                    else:
+                        print(f"  {i}. [{doc_id}]")
                 else:
                     print(f"  {i}. {doc_id}")
         print()
@@ -177,10 +180,13 @@ def run_vector_search(args):
         print(f"🔎 查询: {query}")
         print(f"⏱️  耗时: {cost:.4f}s  |  返回: {len(results)} 条")
         for i, (doc_id, score) in enumerate(results, 1):
-            name = documents[doc_id]['name']
-            if len(name) > 50:
-                name = name[:50] + '...'
-            print(f"  {i}. [相似度: {score:.4f}] [{doc_id}] {name}")
+            # 显示文件名（从完整路径提取）
+            file_path = documents[doc_id].get('file_path', '')
+            if file_path:
+                filename = os.path.basename(file_path)
+                print(f"  {i}. [相似度: {score:.4f}] [{doc_id}] {filename}")
+            else:
+                print(f"  {i}. [相似度: {score:.4f}] [{doc_id}]")
         print()
     
     # 单次查询或交互模式

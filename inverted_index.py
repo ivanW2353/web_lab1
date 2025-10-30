@@ -31,7 +31,7 @@ class InvertedIndex:
         return os.path.join(self.cache_dir, f"index_{cache_key}.json")
     
     def load_index_from_cache(self, normalized_docs: Dict[str, List[str]]) -> bool:
-        """从缓存加载索引"""
+        """从缓存加载索引（优化版：重建term_freq）"""
         cache_file = self._get_cache_file(normalized_docs)
         if os.path.exists(cache_file):
             try:
@@ -41,7 +41,17 @@ class InvertedIndex:
                 self.index = defaultdict(dict, index_data['index'])
                 self.doc_lengths = index_data['doc_lengths']
                 self.doc_count = index_data['doc_count']
-                self.term_freq = defaultdict(dict, index_data['term_freq'])
+                
+                # 重建 term_freq（如果缓存中没有）
+                if 'term_freq' in index_data:
+                    self.term_freq = defaultdict(dict, index_data['term_freq'])
+                else:
+                    print("🔄 重建词频统计...", end=" ", flush=True)
+                    self.term_freq = defaultdict(dict)
+                    for term, docs in self.index.items():
+                        for doc_id, positions in docs.items():
+                            self.term_freq[term][doc_id] = len(positions)
+                    print("✅")
                 
                 print(f"✅ 从缓存加载了包含 {len(self.index)} 个词项的索引")
                 return True
@@ -53,24 +63,7 @@ class InvertedIndex:
     def save_index_to_cache(self, normalized_docs: Dict[str, List[str]]):
         """保存索引到缓存"""
         cache_file = self._get_cache_file(normalized_docs)
-        try:
-            index_data = {
-                'metadata': {
-                    'document_count': self.doc_count,
-                    'term_count': len(self.index),
-                    'timestamp': time.time()
-                },
-                'index': dict(self.index),
-                'doc_lengths': self.doc_lengths,
-                'doc_count': self.doc_count,
-                'term_freq': dict(self.term_freq)
-            }
-            
-            with open(cache_file, 'w', encoding='utf-8') as f:
-                json.dump(index_data, f, ensure_ascii=False, indent=2)
-            
-        except Exception as e:
-            print(f"❌ 保存索引缓存失败: {e}")
+        self._save_index_to_file(cache_file, show_message="保存索引到缓存")
     
     def build_index(self, normalized_docs: Dict[str, List[str]], use_cache: bool = True):
         """构建倒排索引"""
@@ -134,28 +127,45 @@ class InvertedIndex:
             return 0
         return math.log(self.doc_count / df)
     
+    def _save_index_to_file(self, filepath: str, show_message: str = "保存索引到文件"):
+        """内部方法：保存索引到文件（优化版：最紧凑格式）"""
+        try:
+            print(f"💾 {show_message}...", end=" ", flush=True)
+            start_time = time.time()
+            
+            # 不保存 term_freq（可从 index 重建，减少约15%文件大小）
+            index_data = {
+                'metadata': {
+                    'document_count': self.doc_count,
+                    'term_count': len(self.index),
+                    'timestamp': time.time()
+                },
+                'index': dict(self.index),
+                'doc_lengths': self.doc_lengths,
+                'doc_count': self.doc_count
+            }
+            
+            # 使用最紧凑的JSON格式：separators=(',', ':') 去除所有空格
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(index_data, f, ensure_ascii=False, separators=(',', ':'))
+            
+            elapsed = time.time() - start_time
+            file_size_mb = os.path.getsize(filepath) / (1024 * 1024)
+            print(f"✅ ({file_size_mb:.1f}MB, 耗时 {elapsed:.2f}秒)")
+            
+            # 记录保存时间
+            self.processing_times['index_saving'] = elapsed
+            
+        except Exception as e:
+            print(f"❌ 保存索引失败: {e}")
+            raise
+    
     def save_index(self, filepath: str):
-        """保存索引到文件"""
-        start_time = time.time()
-        print("💾 保存索引到文件...", end=" ")
-        
-        index_data = {
-            'index': dict(self.index),
-            'doc_lengths': self.doc_lengths,
-            'doc_count': self.doc_count,
-            'term_freq': dict(self.term_freq)
-        }
-        
-        with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(index_data, f, ensure_ascii=False, indent=2)
-        
-        end_time = time.time()
-        self.processing_times['index_saving'] = end_time - start_time
-        
-        print("✅")
+        """保存索引到指定文件"""
+        self._save_index_to_file(filepath, show_message="保存索引到文件")
     
     def load_index(self, filepath: str):
-        """从文件加载索引"""
+        """从文件加载索引（优化版：支持重建term_freq）"""
         start_time = time.time()
         
         with open(filepath, 'r', encoding='utf-8') as f:
@@ -164,7 +174,15 @@ class InvertedIndex:
         self.index = defaultdict(dict, index_data['index'])
         self.doc_lengths = index_data['doc_lengths']
         self.doc_count = index_data['doc_count']
-        self.term_freq = defaultdict(dict, index_data['term_freq'])
+        
+        # 重建 term_freq（如果文件中没有）
+        if 'term_freq' in index_data:
+            self.term_freq = defaultdict(dict, index_data['term_freq'])
+        else:
+            self.term_freq = defaultdict(dict)
+            for term, docs in self.index.items():
+                for doc_id, positions in docs.items():
+                    self.term_freq[term][doc_id] = len(positions)
         
         end_time = time.time()
         self.processing_times['index_loading'] = end_time - start_time
