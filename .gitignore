@@ -1,0 +1,14 @@
+# venvironment files
+/.conda
+/.env
+/.venv
+
+# data files
+/Meetup
+
+# IDE files
+/.vscode
+/.idea
+
+# Python cache files
+/__pycache__
