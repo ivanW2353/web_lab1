@@ -5,9 +5,10 @@ import json
 import time
 import os
 import hashlib
+from tqdm import tqdm
 
 class InvertedIndex:
-    def __init__(self, cache_dir: str = "Meetup/cache"):  # 修改默认缓存路径
+    def __init__(self, cache_dir: str = "Meetup/cache"):
         self.index = defaultdict(dict)  # term -> {doc_id: [positions]}
         self.doc_lengths = {}  # 文档长度（词项数量）
         self.doc_count = 0
@@ -34,7 +35,6 @@ class InvertedIndex:
         cache_file = self._get_cache_file(normalized_docs)
         if os.path.exists(cache_file):
             try:
-                print(f"从缓存加载索引: {cache_file}")
                 with open(cache_file, 'r', encoding='utf-8') as f:
                     index_data = json.load(f)
                 
@@ -43,10 +43,10 @@ class InvertedIndex:
                 self.doc_count = index_data['doc_count']
                 self.term_freq = defaultdict(dict, index_data['term_freq'])
                 
-                print(f"从缓存加载了包含 {len(self.index)} 个词项的索引")
+                print(f"✅ 从缓存加载了包含 {len(self.index)} 个词项的索引")
                 return True
             except Exception as e:
-                print(f"加载索引缓存失败: {e}")
+                print(f"❌ 加载索引缓存失败: {e}")
         
         return False
     
@@ -69,9 +69,8 @@ class InvertedIndex:
             with open(cache_file, 'w', encoding='utf-8') as f:
                 json.dump(index_data, f, ensure_ascii=False, indent=2)
             
-            print(f"索引已保存到缓存: {cache_file}")
         except Exception as e:
-            print(f"保存索引缓存失败: {e}")
+            print(f"❌ 保存索引缓存失败: {e}")
     
     def build_index(self, normalized_docs: Dict[str, List[str]], use_cache: bool = True):
         """构建倒排索引"""
@@ -81,12 +80,19 @@ class InvertedIndex:
             
         start_time = time.time()
         self.doc_count = len(normalized_docs)
-        print(f"开始构建倒排索引，共 {self.doc_count} 个文档...")
+        print(f"📊 构建倒排索引，共 {self.doc_count} 个文档")
         
-        processed = 0
-        total = len(normalized_docs)
+        # 使用 tqdm 进度条
+        progress_bar = tqdm(
+            normalized_docs.items(),
+            desc="📊 构建索引",
+            total=self.doc_count,
+            unit="文档",
+            ncols=100,
+            bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]"
+        )
         
-        for doc_id, terms in normalized_docs.items():
+        for doc_id, terms in progress_bar:
             self.doc_lengths[doc_id] = len(terms)
             
             # 记录词项位置和频率
@@ -100,16 +106,14 @@ class InvertedIndex:
             # 更新词项频率
             for term, freq in term_freq_in_doc.items():
                 self.term_freq[term][doc_id] = freq
-            
-            processed += 1
-            # 每处理100个文档显示一次进度
-            if processed % 100 == 0 or processed == total:
-                print(f"索引构建进度: {processed}/{total} 文档")
-                
+        
+        # 关闭进度条
+        progress_bar.close()
+        
         end_time = time.time()
         self.processing_times['index_building'] = end_time - start_time
         
-        print(f"倒排索引构建完成，共 {len(self.index)} 个词项，耗时 {end_time - start_time:.2f}秒")
+        print(f"✅ 倒排索引构建完成，共 {len(self.index)} 个词项，耗时 {end_time - start_time:.2f}秒")
         
         # 保存到缓存
         if use_cache:
@@ -133,6 +137,7 @@ class InvertedIndex:
     def save_index(self, filepath: str):
         """保存索引到文件"""
         start_time = time.time()
+        print("💾 保存索引到文件...", end=" ")
         
         index_data = {
             'index': dict(self.index),
@@ -146,7 +151,8 @@ class InvertedIndex:
         
         end_time = time.time()
         self.processing_times['index_saving'] = end_time - start_time
-        print(f"索引已保存到 {filepath}，耗时 {end_time - start_time:.2f}秒")
+        
+        print("✅")
     
     def load_index(self, filepath: str):
         """从文件加载索引"""
@@ -162,7 +168,6 @@ class InvertedIndex:
         
         end_time = time.time()
         self.processing_times['index_loading'] = end_time - start_time
-        print(f"索引从 {filepath} 加载完成，耗时 {end_time - start_time:.2f}秒")
     
     def get_processing_times(self) -> Dict:
         """获取处理时间统计"""

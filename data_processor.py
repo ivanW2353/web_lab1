@@ -5,9 +5,10 @@ from typing import List, Dict
 import time
 import json
 import hashlib
+from tqdm import tqdm
 
 class DataProcessor:
-    def __init__(self, data_path: str, max_files: int = None, cache_dir: str = "Meetup/cache"):  # 修改默认缓存路径
+    def __init__(self, data_path: str, max_files: int = None, cache_dir: str = "Meetup/cache"):
         self.data_path = data_path
         self.documents = {}  # doc_id -> document_content
         self.max_files = max_files
@@ -32,16 +33,15 @@ class DataProcessor:
         cache_file = self._get_cache_file()
         if os.path.exists(cache_file):
             try:
-                print(f"从缓存加载文档: {cache_file}")
                 with open(cache_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                 
                 if 'documents' in data and 'metadata' in data:
                     self.documents = data['documents']
-                    print(f"从缓存加载了 {len(self.documents)} 个文档")
+                    print(f"✅ 从缓存加载了 {len(self.documents)} 个文档")
                     return True
             except Exception as e:
-                print(f"加载缓存失败: {e}")
+                print(f"❌ 加载缓存失败: {e}")
         
         return False
     
@@ -62,9 +62,8 @@ class DataProcessor:
             with open(cache_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
             
-            print(f"文档已保存到缓存: {cache_file}")
         except Exception as e:
-            print(f"保存缓存失败: {e}")
+            print(f"❌ 保存缓存失败: {e}")
         
     def parse_event_files(self, use_cache: bool = True):
         """解析Event XML文件"""
@@ -72,7 +71,7 @@ class DataProcessor:
         if use_cache and self.load_documents_from_cache():
             return
             
-        print(f"开始解析目录: {self.data_path}")
+        print(f"📂 解析目录: {self.data_path}")
         start_time = time.time()
         
         # 获取所有XML文件
@@ -82,19 +81,27 @@ class DataProcessor:
                 if file.endswith('.xml'):
                     xml_files.append(os.path.join(root, file))
         
-        print(f"找到 {len(xml_files)} 个XML文件")
+        print(f"📄 找到 {len(xml_files)} 个 XML 文件")
         
-        if self.max_files:
+        if self.max_files and self.max_files > 0:
             xml_files = xml_files[:self.max_files]
-            print(f"限制解析前 {self.max_files} 个文件")
+            print(f"🔢 限制解析前 {self.max_files} 个文件")
+        else:
+            print("🔢 处理所有文件")
         
         processed_count = 0
         error_count = 0
         
-        # 单行进度显示
-        print("解析进度: ", end="", flush=True)
+        # 使用 tqdm 进度条
+        progress_bar = tqdm(
+            xml_files,
+            desc="📂 解析XML文件",
+            unit="文件",
+            ncols=100,
+            bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]"
+        )
         
-        for i, file_path in enumerate(xml_files):
+        for file_path in progress_bar:
             try:
                 # 解析XML文件
                 tree = ET.parse(file_path)
@@ -121,20 +128,18 @@ class DataProcessor:
                     }
                     processed_count += 1
                     
-            except ET.ParseError:
+            except ET.ParseError as e:
                 error_count += 1
-            except Exception:
+            except Exception as e:
                 error_count += 1
-            
-            # 每处理100个文件显示一次进度
-            if (i + 1) % 100 == 0 or (i + 1) == len(xml_files):
-                print(f"{i + 1}/{len(xml_files)}", end=" ", flush=True)
-                
-        print()  # 换行
+        
+        # 关闭进度条
+        progress_bar.close()
+        
         end_time = time.time()
         self.processing_times['data_parsing'] = end_time - start_time
         
-        print(f"数据解析完成: 成功 {processed_count}, 错误 {error_count}, 耗时 {end_time - start_time:.2f}秒")
+        print(f"✅ 数据解析完成: 成功 {processed_count}, 错误 {error_count}, 耗时 {end_time - start_time:.2f}秒")
         
         # 保存到缓存
         if use_cache:
