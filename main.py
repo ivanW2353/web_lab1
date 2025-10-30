@@ -89,11 +89,27 @@ def run_boolean_search(args):
     
     # 加载文档信息（用于显示名称）
     from data_processor import DataProcessor
-    max_files = args.max_files if args.max_files > 0 else None
-    processor = DataProcessor(data_path=args.data_path, max_files=max_files, cache_dir=args.cache_dir)
     documents = {}
-    if processor.load_documents_from_cache():
-        documents = processor.get_documents()
+    
+    # 尝试加载文档缓存（尝试多种可能的 max_files 值）
+    # 优先尝试：0（全部）、None（全部）、用户指定的值
+    max_files_options = [0, None]  # 0 和 None 都表示全部文档，但缓存键不同
+    if args.max_files > 0 and args.max_files not in max_files_options:
+        max_files_options.append(args.max_files)
+    
+    for max_files_try in max_files_options:
+        processor = DataProcessor(data_path=args.data_path, max_files=max_files_try, cache_dir=args.cache_dir)
+        if processor.load_documents_from_cache():
+            documents = processor.get_documents()
+            print(f"✅ 从缓存加载了 {len(documents)} 个文档")
+            # 检查第一个文档是否有 file_path
+            if documents:
+                first_doc = list(documents.values())[0]
+                if 'file_path' not in first_doc:
+                    print("⚠️  缓存文档缺少 file_path 字段，请删除缓存并重新构建")
+            break
+    else:
+        print("⚠️  未找到文档缓存，将无法显示文件名")
     
     def do_query(query: str):
         results = searcher.search(query)
@@ -109,7 +125,13 @@ def run_boolean_search(args):
                         filename = os.path.basename(file_path)
                         print(f"  {i}. [{doc_id}] {filename}")
                     else:
-                        print(f"  {i}. [{doc_id}]")
+                        # 如果没有file_path，显示文档名称
+                        name = documents[doc_id].get('name', '')
+                        if name:
+                            name = name[:50] + '...' if len(name) > 50 else name
+                            print(f"  {i}. [{doc_id}] {name}")
+                        else:
+                            print(f"  {i}. [{doc_id}]")
                 else:
                     print(f"  {i}. {doc_id}")
         print()
@@ -158,14 +180,29 @@ def run_vector_search(args):
     
     # 加载文档
     print("📂 加载文档...")
-    max_files = args.max_files if args.max_files > 0 else None
-    processor = DataProcessor(data_path=args.data_path, max_files=max_files, cache_dir=args.cache_dir)
     
-    if not processor.load_documents_from_cache():
+    # 尝试加载文档缓存（尝试多种可能的 max_files 值）
+    # 优先尝试：0（全部）、None（全部）、用户指定的值
+    max_files_options = [0, None]  # 0 和 None 都表示全部文档，但缓存键不同
+    if args.max_files > 0 and args.max_files not in max_files_options:
+        max_files_options.append(args.max_files)
+    
+    documents = None
+    for max_files_try in max_files_options:
+        processor = DataProcessor(data_path=args.data_path, max_files=max_files_try, cache_dir=args.cache_dir)
+        if processor.load_documents_from_cache():
+            documents = processor.get_documents()
+            print(f"✅ 从缓存加载了 {len(documents)} 个文档")
+            break
+    
+    # 如果缓存加载失败，解析文档
+    if not documents:
         print("⚠️  缓存未找到，开始解析数据...")
+        max_files = args.max_files if args.max_files > 0 else None
+        processor = DataProcessor(data_path=args.data_path, max_files=max_files, cache_dir=args.cache_dir)
         processor.parse_event_files(use_cache=True)
+        documents = processor.get_documents()
     
-    documents = processor.get_documents()
     if not documents:
         print('❌ 无法加载文档')
         return 2
